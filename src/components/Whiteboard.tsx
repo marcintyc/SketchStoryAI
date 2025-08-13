@@ -10,10 +10,10 @@ export type WhiteboardProps = {
 export function Whiteboard({ width, height, steps }: WhiteboardProps) {
   const pathRefs = useRef<Record<string, SVGPathElement | null>>({})
   const textRefs = useRef<Record<string, SVGTextElement | null>>({})
-  const [playing, setPlaying] = useState<boolean>(true)
   const [currentId, setCurrentId] = useState<string | null>(null)
 
   const penRef = useRef<SVGCircleElement | null>(null)
+  const handRef = useRef<SVGGElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const stopAllAnimation = () => {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
@@ -22,7 +22,6 @@ export function Whiteboard({ width, height, steps }: WhiteboardProps) {
 
   useEffect(() => {
     stopAllAnimation()
-    setPlaying(true)
 
     const run = async () => {
       for (const step of steps) {
@@ -63,15 +62,23 @@ export function Whiteboard({ width, height, steps }: WhiteboardProps) {
     const startTs = performance.now()
 
     const pen = penRef.current
+    const hand = handRef.current
     if (pen) pen.style.opacity = '1'
+    if (hand) hand.style.opacity = '1'
 
     const tick = (now: number) => {
       const t = Math.min(1, (now - startTs) / step.durationMs)
       const currentLen = total * t
+      const p = el.getPointAtLength(Math.max(0.0001, currentLen))
+      const ahead = el.getPointAtLength(Math.min(total, currentLen + 1))
+      const angleRad = Math.atan2(ahead.y - p.y, ahead.x - p.x)
+      const angleDeg = (angleRad * 180) / Math.PI
       if (pen) {
-        const p = el.getPointAtLength(currentLen)
         pen.setAttribute('cx', String(p.x))
         pen.setAttribute('cy', String(p.y))
+      }
+      if (hand) {
+        hand.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${angleDeg})`)
       }
       if (t < 1) {
         rafRef.current = requestAnimationFrame(tick)
@@ -83,6 +90,7 @@ export function Whiteboard({ width, height, steps }: WhiteboardProps) {
       el.style.strokeDashoffset = '0'
       setTimeout(() => {
         if (penRef.current) penRef.current.style.opacity = '0'
+        if (handRef.current) handRef.current.style.opacity = '0'
         resolve()
       }, step.durationMs + 32)
     })
@@ -145,7 +153,14 @@ export function Whiteboard({ width, height, steps }: WhiteboardProps) {
           )
         ))}
 
-        <circle ref={penRef} r={6} fill="#111" style={{ opacity: 0 }} />
+        <g ref={handRef} style={{ opacity: 0 }}>
+          <g transform="translate(-10, -8)">
+            <rect x="-8" y="-6" width="24" height="16" rx="6" fill="#f3d8b3" />
+            <rect x="10" y="-2" width="28" height="6" rx="3" fill="#222" />
+            <polygon points="38,-2 48,0 38,2" fill="#222" />
+          </g>
+        </g>
+        <circle ref={penRef} r={4} fill="#111" style={{ opacity: 0 }} />
       </svg>
     </div>
   )
